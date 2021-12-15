@@ -24,6 +24,10 @@ import (
 	"strconv"
 )
 
+type Context struct {
+	handle C.ulonglong
+}
+
 type LibraryConfig struct {
 	log_level LogLevel
 	logging_backend LoggingBackend
