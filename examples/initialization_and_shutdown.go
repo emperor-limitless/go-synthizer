@@ -24,6 +24,8 @@ package main
 
 import (
 	"github.com/mohamedSulaimanAlmarzooqi/go-synthizer"
+	"fmt"
+	"strconv"
 )
 
 func main() {
