@@ -26,7 +26,10 @@ package synthizer
 #include <synthizer.h>
 #include <synthizer_constants.h>
 #include <stdlib.h>
-
+#include <stdbool.h>
+bool bld(int value) {
+	return value == 0;
+}
 struct syz_DeleteBehaviorConfig create_DeleteBehaviorConfig(int linger, double linger_timeout) {
 	struct syz_DeleteBehaviorConfig cfg;
 	cfg.linger = linger;
@@ -51,6 +54,7 @@ import (
 	"errors"
 	"strconv"
 	"reflect"
+	"runtime"
 )
 
 // The synthizer main object struct.
@@ -137,6 +141,46 @@ func (self *IntProperty) Set(value int) error {
 	return nil
 }
 
+
+// A boolean property, For stuff like looping so we don't need to let the user do something like object.looping.Set(1) OR something like that.
+type BoolProperty struct {
+	PropertyBase
+}
+
+func NewBoolProperty(instance *ObjectBase, property C.int) BoolProperty {
+	return BoolProperty { PropertyBase { instance, property } }
+}
+
+func (self *BoolProperty) Get() (error, bool) {
+	var val C.int = 0
+	err, handle := self.GetHandleChecked()
+	if err != nil {
+		return err, false
+	}
+	err = CHECKED(C.syz_getI(&val, *handle, self.property))
+	if err != nil {
+		return err, false
+	}
+	return nil, bool(C.bld(val))
+}
+
+func (self *BoolProperty) Set(val bool) error {
+	var value int
+	if val == true {
+		value = 1
+	} else {
+		value = 0
+	}
+	err, handle := self.GetHandleChecked()
+	if err != nil {
+		return err
+	}
+	err = CHECKED(C.syz_setI(*handle, self.property, C.int(value)))
+	if err != nil {
+		return err
+	}
+	return nil
+}
 
 type DoubleProperty struct {
 	PropertyBase
@@ -302,14 +346,14 @@ func NewContext() (error, *Context) {
 	return nil, &self
 }
 
-type streamHandle struct {
+type StreamHandle struct {
 	ObjectBase
 }
-func newStreamHandle(handle *C.syz_Handle) *streamHandle {
-	return &streamHandle { ObjectBase { handle } }
+func newStreamHandle(handle *C.syz_Handle) *StreamHandle {
+	return &StreamHandle { ObjectBase { handle } }
 }
 
-func StreamHandleFromFile(path string) (error, *streamHandle) {
+func StreamHandleFromFile(path string) (error, *StreamHandle) {
 	handle := C.create_handle()
 	ph := C.CString(path)
 	defer C.free(unsafe.Pointer(ph))
@@ -321,16 +365,20 @@ func StreamHandleFromFile(path string) (error, *streamHandle) {
 }
 
 // Probably needs improvement, Now it only accepts a string because I can't figure a way to safely pass everything from a byte array as const *char, But if you do, Then please submit a pull request.
-// And this will probably not work properly anyways.
-func StreamHandleFromMemory(data string) (error, *streamHandle) {
+func StreamHandleFromMemory(data string) (error, *StreamHandle) {
 	dt := C.CString(data)
-	defer C.free(unsafe.Pointer(dt))
 	handle := C.create_handle()
 	err := CHECKED(C.syz_createStreamHandleFromMemory(&handle, C.ulonglong(len(data)), dt, nil, nil))
 	if err != nil {
 		return err, nil
 	}
-	return nil, newStreamHandle(&handle)
+	sh := newStreamHandle(&handle)
+	// We're doing this instead of synthizer FreeCallbacks because you can't pass go functions to C.
+	// IF you have a better way for doing this, Please submit a pull request.
+	runtime.SetFinalizer(sh, func(Sh *StreamHandle) {
+		C.free(unsafe.Pointer(dt))
+	})
+	return nil, sh
 }
 // We're missing custom stream handles and protocols because I'm not properly sure how to implement them, If you do, Then please send a pull request.
 
@@ -349,13 +397,13 @@ func newGenerator(handle *C.syz_Handle) *Generator {
 
 type StreamingGenerator struct {
 	Generator
-	Looping IntProperty
+	Looping BoolProperty
 	PlaybackPosition DoubleProperty
 }
 func newStreamingGenerator(handle *C.syz_Handle) *StreamingGenerator {
 	self := StreamingGenerator{}
 	self.Generator = *newGenerator(handle)
-	self.Looping = NewIntProperty(&self.ObjectBase, P_LOOPING)
+	self.Looping = NewBoolProperty(&self.ObjectBase, P_LOOPING)
 	self.PlaybackPosition = NewDoubleProperty(&self.ObjectBase, P_PLAYBACK_POSITION)
 	return &self
 }
@@ -371,7 +419,7 @@ func StreamingGeneratorFromFile(ctx *Context, path string) (error, *StreamingGen
 	return nil, newStreamingGenerator(&out)
 }
 
-func StreamingGeneratorFromHandle(ctx *Context, stream *streamHandle) (error, *StreamingGenerator) {
+func StreamingGeneratorFromHandle(ctx *Context, stream *StreamHandle) (error, *StreamingGenerator) {
 	handle := C.create_handle()
 	err := CHECKED(C.syz_createStreamingGeneratorFromStreamHandle(&handle, *ctx.handle, *stream.handle, nil, nil, nil))
 	if err != nil {
@@ -416,17 +464,177 @@ func (self *Source) RemoveGenerator(gen Generator) error {
 }
 
 
-type directSource struct {
+type DirectSource struct {
 	Source
 }
-func NewDirectSource(ctx *Context) (error, *directSource) {
+func NewDirectSource(ctx *Context) (error, *DirectSource) {
 	out := C.create_handle()
 	err := CHECKED(C.syz_createDirectSource(&out, *ctx.handle, nil, nil, nil))
 	if err != nil {
 		return err, nil
 	}
-	return nil, &directSource { *newSource(&out) }
+	return nil, &DirectSource { *newSource(&out) }
 }
+
+type AngularPannedSource struct {
+	Source
+	Azimuth, Elevation DoubleProperty
+}
+
+func NewAngularPannedSource(ctx *Context, panner_strategy C.int, azimuth float32, elevation float32) (error, *AngularPannedSource) {
+	out := C.create_handle()
+	err := CHECKED(C.syz_createAngularPannedSource(&out, *ctx.handle, panner_strategy, C.double(azimuth), C.double(elevation), nil, nil, nil))
+	if err != nil {
+		return err, nil
+	}
+	self := AngularPannedSource{}
+	self.Source = *newSource(&out)
+	self.Azimuth = NewDoubleProperty(&self.ObjectBase, P_AZIMUTH)
+	self.Elevation = NewDoubleProperty(&self.ObjectBase, P_ELEVATION)
+	return nil, &self
+}
+
+type ScalarPannedSource struct {
+	Source
+	PanningScalar DoubleProperty
+}
+
+func NewScalarPannedSource(ctx *Context, panner_strategy C.int, panning_scalar float32) (error, *ScalarPannedSource) {
+	out := C.create_handle()
+	err := CHECKED(C.syz_createScalarPannedSource(&out, *ctx.handle, panner_strategy, C.double(panning_scalar), nil, nil, nil))
+	if err != nil {
+		return err, nil
+	}
+	self := ScalarPannedSource{}
+	self.Source = *newSource(&out)
+	self.PanningScalar = NewDoubleProperty(&self.ObjectBase, P_PANNING_SCALAR)
+	return nil, &self
+}
+
+type Source3D struct {
+	Source
+	DistanceRef, DistanceMax, Rolloff, ClosenessBoost, ClosenessBoostDistance DoubleProperty
+	Position Double3Property
+	Orientation Double6Property
+	DistanceModel IntProperty
+}
+
+func NewSource3D(ctx *Context) (error, *Source3D) {
+	out := C.create_handle()
+	err := CHECKED(C.syz_createSource3D(&out, *ctx.handle, C.int(PANNER_STRATEGY_DELEGATE), C.double(0.0), C.double(0.0), C.double(0.0), nil, nil, nil))
+	if err != nil {
+		return err, nil
+	}
+	self := Source3D{}
+	self.Source = *newSource(&out)
+	self.DistanceModel = NewIntProperty(&self.ObjectBase, P_DISTANCE_MODEL)
+	self.DistanceRef = NewDoubleProperty(&self.ObjectBase, P_DISTANCE_REF)
+	self.DistanceMax = NewDoubleProperty(&self.ObjectBase, P_DISTANCE_MAX)
+	self.Rolloff = NewDoubleProperty(&self.ObjectBase, P_ROLLOFF)
+	self.ClosenessBoost = NewDoubleProperty(&self.ObjectBase, P_CLOSENESS_BOOST)
+	self.ClosenessBoostDistance = NewDoubleProperty(&self.ObjectBase, P_CLOSENESS_BOOST_DISTANCE)
+	self.Position = NewDouble3Property(&self.ObjectBase, P_POSITION)
+	self.Orientation = NewDouble6Property(&self.ObjectBase, P_ORIENTATION)
+	return nil, &self
+}
+
+
+
+type Buffer struct {
+	ObjectBase
+}
+
+func newBuffer(handle *C.syz_Handle) *Buffer {
+	return &Buffer { ObjectBase { handle } }
+}
+func BufferFromFile(path string) (error, *Buffer) {
+	handle := NewHandle()
+	ph := C.CString(path)
+	defer C.free(unsafe.Pointer(ph))
+		err := CHECKED(C.syz_createBufferFromFile(&handle, ph, nil, nil))
+	if err != nil {
+		return err, nil
+	}
+	return nil, newBuffer(&handle)
+}
+
+func BufferFromEncodedData(data string) (error, *Buffer) {
+	handle := NewHandle()
+	dt := C.CString(data)
+	defer C.free(unsafe.Pointer(dt))
+	length := len(data)
+	if length == 0 {
+		return errors.New("Cannot safely pass empty arrays to synthizer."), nil
+	}
+	err := CHECKED(C.syz_createBufferFromEncodedData(&handle, C.ulonglong(length), dt, nil, nil))
+	if err != nil {
+		return err, nil
+	}
+	return nil, newBuffer(&handle)
+}
+// Todo: Add BufferFromFloatArray function.
+
+func BufferFromStreamHandle(stream StreamHandle) (error, *Buffer) {
+	handle := NewHandle()
+	err := CHECKED(C.syz_createBufferFromStreamHandle(&handle, *stream.handle, nil, nil))
+	if err != nil {
+		return err, nil
+	}
+	return nil, newBuffer(&handle)
+}
+func (self *Buffer) GetChannels() (error, int) {
+	var ret C.uint
+	err := CHECKED(C.syz_bufferGetChannels(&ret, *self.handle))
+	if err != nil {
+		return err, 0
+	}
+	return nil, int(ret)
+}
+
+func (self *Buffer) GetLengthInSamples() (error, int) {
+	var ret C.uint
+	err := CHECKED(C.syz_bufferGetLengthInSamples(&ret, *self.handle))
+	if err != nil {
+		return err, 0
+	}
+	return nil, int(ret)
+}
+
+func (self *Buffer) GetLengthInSeconds() (error, float64) {
+	var ret C.double
+	err := CHECKED(C.syz_bufferGetLengthInSeconds(&ret, *self.handle))
+	if err != nil {
+		return err, 0.0
+	}
+	return nil, float64(ret)
+}
+
+// Todo: Add Buffer.GetLengthInBytes
+type BufferGenerator struct {
+	Generator
+	Looping BoolProperty
+	Buffer ObjectProperty
+	PlaybackPosition DoubleProperty
+}
+
+func NewBufferGenerator(ctx *Context) (error, *BufferGenerator) {
+	handle := NewHandle()
+	err, ctx_h := ctx.GetHandleChecked()
+	if err != nil {
+		return err, nil
+	}
+	err = CHECKED(C.syz_createBufferGenerator(&handle, *ctx_h, nil, nil, nil))
+	if err != nil {
+		return err, nil
+	}
+	self := BufferGenerator{}
+	self.Generator = *newGenerator(&handle)
+	self.Buffer = NewObjectProperty(&self.ObjectBase, P_BUFFER)
+	self.PlaybackPosition = NewDoubleProperty(&self.ObjectBase, P_PLAYBACK_POSITION)
+	self.Looping = NewBoolProperty(&self.ObjectBase, P_LOOPING)
+	return nil, &self
+}
+
 
 type LibraryConfig struct {
 	log_level LogLevel

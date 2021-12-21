@@ -5,6 +5,7 @@ This binding is not production ready yet, And there's a big possibility major bu
 ## What can we do now?
  - Initialize, With or without libraryConfig.
  - Creating context.
- - Creating generators, For now, Only streaming generator and it still misses some functionality.
- - Creating directSources.
- - Editing properties, Although untested and probably contains buggs.
+ - Creating generators, StreamingGenerator and bufferGenerator.
+ - Creating Sources, Direct, ScalarPanned, AngularPanned, And Source3D
+ - Creating Buffers.
+ - Editing properties.
