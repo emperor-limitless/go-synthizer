@@ -1,7 +1,7 @@
 # go-synthizer
 A golang binding to the [synthizer](https://github.com/synthizer/synthizer) audio library.
 ## Status
-This binding is not production ready yet, And there's a big possibility major buggs can be found, Since I'm new to go, So if you found any, Please submit an issue or a pull request if you would like to fix it you're self.
+While many functionality is missing, But this should work if you try to use it for basic audio usage, Stuff like custom streams, FromFloatArrays, Events and filters are not here yet, Although should be soon.
 ## What can we do now?
  - Initialize, With or without libraryConfig.
  - Creating context.
