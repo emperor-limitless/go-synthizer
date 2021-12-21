@@ -25,11 +25,33 @@ package main
 import (
 	"github.com/mohamedSulaimanAlmarzooqi/go-synthizer"
 	"fmt"
-	"strconv"
 )
 
 func main() {
+	fmt.Println("Enter file path, Example: hello.mp3.")
+	var flname string
+	fmt.Scanln(&flname)
+	if flname == "" {
+		fmt.Println("Error: Invalid path.")
+		return
+	}
 	conf := synthizer.NewLibraryConfig(synthizer.LOG_LEVEL_DEBUG, synthizer.LOGGING_BACKEND_STDERR)
 	synthizer.InitializeWithConfig(&conf)
-	synthizer.Shutdown()
+	defer synthizer.Shutdown()
+	err, ctx := synthizer.NewContext()
+	defer ctx.Destroy()
+	synthizer.GOCHECK(err)
+	err, sh := synthizer.StreamHandleFromFile(flname)
+	synthizer.GOCHECK(err)
+	err, gen := synthizer.StreamingGeneratorFromHandle(ctx, sh)
+	defer gen.Destroy()
+	synthizer.GOCHECK(err)
+	err, src := synthizer.NewDirectSource(ctx)
+	defer src.Destroy()
+	synthizer.GOCHECK(err)
+	src.AddGenerator(gen.Generator)
+	src.Play()
+	fmt.Println("Press enter to exit...")
+	var empty string
+	fmt.Scanln(&empty)
 }
