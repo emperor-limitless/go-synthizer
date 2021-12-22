@@ -530,7 +530,15 @@ type AngularPannedSource struct {
 	Azimuth, Elevation DoubleProperty
 }
 
-func NewAngularPannedSource(ctx *Context, panner_strategy C.int, azimuth float32, elevation float32) (error, *AngularPannedSource) {
+func NewAngularPannedSource(ctx *Context, panner_strategy C.int, OV ...float32) (error, *AngularPannedSource) {
+	var azimuth float32 = 0.0
+	var elevation float32 = 0.0
+	if len(OV) > 0 {
+		azimuth = OV[0]
+		if len(OV) > 1 {
+			elevation = OV[1]
+		}
+	}
 	out := C.create_handle()
 	err := CHECKED(C.syz_createAngularPannedSource(&out, *ctx.handle, panner_strategy, C.double(azimuth), C.double(elevation), nil, nil, nil))
 	if err != nil {
