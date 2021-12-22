@@ -25,13 +25,16 @@ package main
 import (
 	"github.com/mohamedSulaimanAlmarzooqi/go-synthizer"
 	"fmt"
-	"io/ioutil"
+	"bufio"
+	"os"
 )
 
 func main() {
 	fmt.Println("Enter file path, Example: hello.mp3.")
 	var flname string
-	fmt.Scanln(&flname)
+	sr := bufio.NewScanner(os.Stdin)
+	sr.Scan()
+	flname = sr.Text()
 	if flname == "" {
 		fmt.Println("Error: Invalid path.")
 		return
@@ -42,23 +45,22 @@ func main() {
 	err, ctx := synthizer.NewContext()
 	synthizer.GOCHECK(err)
 	defer ctx.Destroy()
-	dt, err := ioutil.ReadFile(flname)
+	err, buf := synthizer.BufferFromFile(flname)
 	synthizer.GOCHECK(err)
-	err, sh := synthizer.StreamHandleFromMemory(string(dt))
-	synthizer.GOCHECK(err)
-	err, gen := synthizer.StreamingGeneratorFromHandle(ctx, sh)
+	defer buf.Destroy()
+	err, gen := synthizer.NewBufferGenerator(ctx)
 	synthizer.GOCHECK(err)
 	defer gen.Destroy()
-	err = gen.Looping.Set(false)
-	synthizer.GOCHECK(err)
-	err, src := synthizer.NewDirectSource(ctx)
+	gen.Buffer.Set(buf.ObjectBase)
+	err, src := synthizer.NewSource3D(ctx)
 	synthizer.GOCHECK(err)
 	defer src.Destroy()
+	err, reverb := synthizer.NewGlobalFdnReverb(ctx)
+	synthizer.GOCHECK(err)
+	reverb.T60.Set(10.0)
+	err = ctx.ConfigRoute(src.ObjectBase, reverb.ObjectBase)
+	synthizer.GOCHECK(err)
 	src.AddGenerator(gen.Generator)
-	src.Gain.Set(0.6)
-	src.Play()
-	fmt.Println("Press enter to exit...")
-	var empty string
-	fmt.Scanln(&empty)
-	sh = nil
+	fmt.Println("Press enter to exit.")
+	fmt.Scanln(&flname)
 }

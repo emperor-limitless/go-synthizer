@@ -25,40 +25,25 @@ package main
 import (
 	"github.com/mohamedSulaimanAlmarzooqi/go-synthizer"
 	"fmt"
-	"io/ioutil"
 )
 
 func main() {
-	fmt.Println("Enter file path, Example: hello.mp3.")
-	var flname string
-	fmt.Scanln(&flname)
-	if flname == "" {
-		fmt.Println("Error: Invalid path.")
-		return
-	}
 	conf := synthizer.NewLibraryConfig(synthizer.LOG_LEVEL_DEBUG, synthizer.LOGGING_BACKEND_STDERR)
 	synthizer.InitializeWithConfig(&conf)
 	defer synthizer.Shutdown()
 	err, ctx := synthizer.NewContext()
 	synthizer.GOCHECK(err)
 	defer ctx.Destroy()
-	dt, err := ioutil.ReadFile(flname)
-	synthizer.GOCHECK(err)
-	err, sh := synthizer.StreamHandleFromMemory(string(dt))
-	synthizer.GOCHECK(err)
-	err, gen := synthizer.StreamingGeneratorFromHandle(ctx, sh)
+	err, gen := synthizer.NewNoiseGenerator(ctx, 2)
 	synthizer.GOCHECK(err)
 	defer gen.Destroy()
-	err = gen.Looping.Set(false)
-	synthizer.GOCHECK(err)
 	err, src := synthizer.NewDirectSource(ctx)
 	synthizer.GOCHECK(err)
 	defer src.Destroy()
+	src.Gain.Set(0.3) // By default the noise output is extremely loud
 	src.AddGenerator(gen.Generator)
-	src.Gain.Set(0.6)
-	src.Play()
-	fmt.Println("Press enter to exit...")
+	gen.NoiseType.Set(synthizer.NOISE_TYPE_VM) // For others, Check consts.go in the mains go-synthizer directory.
 	var empty string
+	fmt.Println("Press enter to exit.")
 	fmt.Scanln(&empty)
-	sh = nil
 }

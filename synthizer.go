@@ -297,6 +297,25 @@ func (self *ObjectProperty) Set(value ObjectBase) error {
 	return nil
 }
 
+type BiquadProperty struct {
+	PropertyBase
+}
+func NewBiquadProperty(instance *ObjectBase, property C.int) BiquadProperty {
+	return BiquadProperty { PropertyBase { instance, property } }
+}
+
+func (self *BiquadProperty) Set(value BiquadConfig) error {
+	err, handle := self.GetHandleChecked()
+	if err != nil {
+		return err
+	}
+	err = CHECKED(C.syz_setBiquad(*handle, self.property, value.config))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 type Pausable struct {
 	ObjectBase
 	current_time, suggested_automation_time DoubleProperty
@@ -344,6 +363,36 @@ func NewContext() (error, *Context) {
 	self.Default_closeness_boost_distance = NewDoubleProperty(&self.ObjectBase, P_DEFAULT_CLOSENESS_BOOST_DISTANCE)
 	self.Default_panner_strategy = NewIntProperty(&self.ObjectBase, P_DEFAULT_PANNER_STRATEGY)
 	return nil, &self
+}
+
+func (self *Context) ConfigRoute(output ObjectBase, input ObjectBase, optionalV ...float64) error {
+	config := C.struct_syz_RouteConfig{}
+	err := CHECKED(C.syz_initRouteConfig(&config))
+	if err != nil {
+		return err
+	}
+	if len(optionalV) > 0 {
+		config.gain = C.double(optionalV[0])
+		if len(optionalV) > 1 {
+			config.fade_time = C.double(optionalV[1])
+		}
+	}
+	err = CHECKED(C.syz_routingConfigRoute(*self.handle, *output.handle, *input.handle, &config))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+func (self *Context) RemoveRoute(output ObjectBase, input ObjectBase, optionalV ...float64) error {
+	fade_time := 0.01
+	if len(optionalV) > 0 {
+		fade_time = optionalV[0]
+	}
+	err := CHECKED(C.syz_routingRemoveRoute(*self.handle, *output.handle, *input.handle, C.double(fade_time)))
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 type StreamHandle struct {
@@ -635,6 +684,153 @@ func NewBufferGenerator(ctx *Context) (error, *BufferGenerator) {
 	return nil, &self
 }
 
+
+type NoiseGenerator struct {
+	Generator
+	NoiseType IntProperty
+}
+
+func NewNoiseGenerator(ctx *Context, channels int) (error, *NoiseGenerator) {
+	handle := NewHandle()
+	err, ctx_h := ctx.GetHandleChecked()
+	if err != nil {
+		return err, nil
+	}
+	err = CHECKED(C.syz_createNoiseGenerator(&handle, *ctx_h, C.uint(channels), nil, nil, nil))
+	if err != nil {
+		return err, nil
+	}
+	self := NoiseGenerator{}
+	self.Generator = *newGenerator(&handle)
+	self.NoiseType = NewIntProperty(&self.ObjectBase, P_NOISE_TYPE)
+	return nil, &self
+}
+
+
+type BiquadConfig struct {
+	config *C.struct_syz_BiquadConfig
+}
+
+func newBiquadConfig() (error, *BiquadConfig) {
+	self := BiquadConfig { &C.struct_syz_BiquadConfig{} }
+	err := CHECKED(C.syz_biquadDesignIdentity(self.config))
+	if err != nil {
+		return err, nil
+	}
+	return nil, &self
+}
+
+func BiquadConfigDesignIdentity() (error, *BiquadConfig) {
+	err, out := newBiquadConfig()
+	if err != nil {
+		return err, nil
+	}
+	err = CHECKED(C.syz_biquadDesignIdentity(out.config))
+	if err != nil {
+		return err, nil
+	}
+	return nil, out
+}
+func BiquadConfigDesignLowpass(frequency float64, OV ...float64) (error, *BiquadConfig) {
+	err, out := newBiquadConfig()
+	if err != nil {
+		return err, nil
+	}
+	q := 0.7071135624381276
+	if len(OV) > 0 {
+		q = OV[0]
+	}
+	err = CHECKED(C.syz_biquadDesignLowpass(out.config, C.double(frequency), C.double(q)))
+	if err != nil {
+		return err, nil
+	}
+	return nil, out
+}
+
+func BiquadConfigDesignHighpass(frequency float64, OV ...float64) (error, *BiquadConfig) {
+	err, out := newBiquadConfig()
+	if err != nil {
+		return err, nil
+	}
+	q := 0.7071135624381276
+	if len(OV) > 0 {
+		q = OV[0]
+	}
+	err = CHECKED(C.syz_biquadDesignHighpass(out.config, C.double(frequency), C.double(q)))
+	if err != nil {
+		return err, nil
+	}
+	return nil, out
+}
+
+func BiquadDesignBandpass(frequency float64, bandwidth float64) (error, *BiquadConfig) {
+	err, out := newBiquadConfig()
+	if err != nil {
+		return err, nil
+	}
+	err = CHECKED(C.syz_biquadDesignBandpass(out.config, C.double(frequency), C.double(bandwidth)))
+	if err != nil {
+		return err, nil
+	}
+	return nil, out
+}
+
+type GlobalEffect struct {
+	ObjectBase
+	FilterInput BiquadProperty
+	Gain DoubleProperty
+}
+
+func newGlobalEffect(handle *C.syz_Handle) *GlobalEffect {
+	self := GlobalEffect{}
+	self.ObjectBase = ObjectBase { handle }
+	self.Gain = NewDoubleProperty(&self.ObjectBase, P_GAIN)
+	self.FilterInput = NewBiquadProperty(&self.ObjectBase, P_FILTER_INPUT)
+	return &self
+}
+func (self *GlobalEffect) Reset() error {
+	return CHECKED(C.syz_effectReset(*self.handle))
+}
+
+type EchoTapConfig struct {
+	Delay float64
+	GainL float64
+	GainR float64
+}
+func NewEchoTapConfig(delay float64, gain_l float64, gain_r float64) *EchoTapConfig {
+	return &EchoTapConfig { delay, gain_l, gain_r }
+}
+
+// Todo, Add GlobalEcho.
+type GlobalFdnReverb struct {
+	GlobalEffect
+	MeanFreePath, T60, LateReflectionsLfRolloff, LateReflectionsLfReference, LateReflectionsHfRolloff, LateReflectionsHfReference, LateReflectionsDiffusion, LateReflectionsModulationDepth, LateReflectionsModulationFrequency, LateReflectionsDelay DoubleProperty	
+}
+
+func NewGlobalFdnReverb(ctx *Context) (error, *GlobalFdnReverb) {
+	handle := NewHandle()
+	err, h := ctx.GetHandleChecked()
+	if err != nil {
+		return err, nil
+	}
+	err = CHECKED(C.syz_createGlobalFdnReverb(&handle, *h, nil, nil, nil))
+	if err != nil {
+		return err, nil
+	}
+	self := GlobalFdnReverb {}
+	self.GlobalEffect = *newGlobalEffect(&handle)
+	self.MeanFreePath = NewDoubleProperty(&self.ObjectBase, P_MEAN_FREE_PATH)
+	self.T60 = NewDoubleProperty(&self.ObjectBase, P_T60)
+	self.LateReflectionsLfRolloff = NewDoubleProperty(&self.ObjectBase, P_LATE_REFLECTIONS_LF_ROLLOFF)
+	self.LateReflectionsLfReference = NewDoubleProperty(&self.ObjectBase, P_LATE_REFLECTIONS_LF_REFERENCE)
+	self.LateReflectionsHfRolloff = NewDoubleProperty(&self.ObjectBase, P_LATE_REFLECTIONS_HF_ROLLOFF)
+	self.LateReflectionsHfReference = NewDoubleProperty(&self.ObjectBase, P_LATE_REFLECTIONS_HF_REFERENCE)
+	self.LateReflectionsDiffusion = NewDoubleProperty(&self.ObjectBase, P_LATE_REFLECTIONS_DIFFUSION)
+	self.LateReflectionsModulationDepth = NewDoubleProperty(&self.ObjectBase, P_LATE_REFLECTIONS_MODULATION_DEPTH)
+	self.LateReflectionsModulationFrequency = NewDoubleProperty(&self.ObjectBase, P_LATE_REFLECTIONS_MODULATION_FREQUENCY)
+	self.LateReflectionsDelay = NewDoubleProperty(&self.ObjectBase, P_LATE_REFLECTIONS_DELAY)
+	return nil, &self
+}
 
 type LibraryConfig struct {
 	log_level LogLevel
