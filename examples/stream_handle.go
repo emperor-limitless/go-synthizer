@@ -25,12 +25,16 @@ package main
 import (
 	"github.com/mohamedSulaimanAlmarzooqi/go-synthizer"
 	"fmt"
+	"bufio"
+	"os"
 )
 
 func main() {
 	fmt.Println("Enter file path, Example: hello.mp3.")
 	var flname string
-	fmt.Scanln(&flname)
+	sr := bufio.NewScanner(os.Stdin)
+	sr.Scan()
+	flname = sr.Text()
 	if flname == "" {
 		fmt.Println("Error: Invalid path.")
 		return
