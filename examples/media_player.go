@@ -43,22 +43,17 @@ func main() {
 	}
 	conf := synthizer.NewLibraryConfig(synthizer.LOG_LEVEL_DEBUG, synthizer.LOGGING_BACKEND_STDERR)
 	synthizer.InitializeWithConfig(&conf)
-	defer synthizer.Shutdown()
 	err, ctx := synthizer.NewContext()
 	synthizer.GOCHECK(err)
-	defer ctx.Destroy()
 	ctx.Default_panner_strategy.Set(synthizer.PANNER_STRATEGY_HRTF)
 	err, buf := synthizer.BufferFromFile(flname)
 	synthizer.GOCHECK(err)
-	defer buf.Destroy()
 	err, gen := synthizer.NewBufferGenerator(ctx)
 	synthizer.GOCHECK(err)
-	defer gen.Destroy()
 	gen.Buffer.Set(buf.ObjectBase)
 	gen.Looping.Set(true)
 	err, src := synthizer.NewSource3D(ctx)
 	synthizer.GOCHECK(err)
-	defer src.Destroy()
 	src.AddGenerator(gen.Generator)
 	var argv []string
 	for true {
@@ -129,4 +124,9 @@ func main() {
 			continue
 		}
 	}
+	defer synthizer.GOCHECK(src.Destroy())
+	defer synthizer.GOCHECK(gen.Destroy())
+	defer synthizer.GOCHECK(buf.Destroy())
+	defer synthizer.GOCHECK(ctx.Destroy())
+	defer synthizer.GOCHECK(synthizer.Shutdown())
 }

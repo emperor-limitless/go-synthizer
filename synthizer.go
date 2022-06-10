@@ -75,8 +75,9 @@ func (self *ObjectBase) GetHandleChecked() (error, *C.syz_Handle) {
 }
 
 func (self *ObjectBase) Destroy() error {
-	*self.handle = 0
-	return CHECKED(C.syz_handleDecRef(*self.handle))
+	err := CHECKED(C.syz_handleDecRef(*self.handle))
+	//*self.handle = 0
+	return err
 }
 
 func (self *ObjectBase) GetHandle() *C.syz_Handle {
@@ -879,7 +880,6 @@ func GOCHECK(err error) error {
 // Convert A C char* to a GoString, Freeing the C char and returning the go String.
 func CCharToGoString(ch *C.char) string {
 	str := C.GoString(ch)
-	C.free(unsafe.Pointer(ch))
 	return str
 }
 
