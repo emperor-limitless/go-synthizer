@@ -65,13 +65,13 @@ func _NewObjectBase(hdl *C.syz_Handle) ObjectBase {
 	return ObjectBase { handle: hdl }
 }
 
-func (self *ObjectBase) GetHandleChecked() (error, *C.syz_Handle) {
+func (self *ObjectBase) GetHandleChecked() (*C.syz_Handle, error) {
 	// Any attempt to reference a non-existing object should raise an error
 	handle := self.GetHandle()
 	if *handle == 0 {
-		return errors.New("SynthizerError: Object no longer exist"), nil
+		return nil, errors.New("SynthizerError: Object no longer exist")
 	}
-	return nil, handle
+	return handle, nil
 }
 
 func (self *ObjectBase) Destroy() error {
@@ -93,17 +93,17 @@ type PropertyBase struct {
 	instance *ObjectBase
 	property C.int
 }
-func (self *PropertyBase) GetHandleChecked() (error, *C.syz_Handle) {
+func (self *PropertyBase) GetHandleChecked() (*C.syz_Handle, error) {
 	// Any attempt to reference a non-existing object should raise an error
 	obj := reflect.ValueOf(*self.instance)
 	if obj.IsZero() {
-		return errors.New("SynthizerError: Object no longer exist"), nil
+		return nil, errors.New("SynthizerError: Object no longer exist")
 	}
 	handle := (*self.instance).GetHandle()
 	if *handle == 0 {
-		return errors.New("SynthizerError: Object no longer exist"), nil
+		return nil, errors.New("SynthizerError: Object no longer exist")
 	}
-	return nil, handle
+	return handle, nil
 }
 func (self *PropertyBase) GetProperty() C.int {
 	return self.property
@@ -117,21 +117,21 @@ func NewIntProperty(instance *ObjectBase, property C.int) IntProperty {
 	return IntProperty { PropertyBase { instance, property } }
 }
 
-func (self *IntProperty) Get() (error, int) {
+func (self *IntProperty) Get() (int, error) {
 	var val C.int = 0
-	err, handle := self.GetHandleChecked()
+	handle, err := self.GetHandleChecked()
 	if err != nil {
-		return err, 0
+		return 0, err
 	}
 	err = CHECKED(C.syz_getI(&val, *handle, self.property))
 	if err != nil {
-		return err, 0
+		return 0, err
 	}
-	return nil, int(val)
+	return int(val), nil
 }
 
 func (self *IntProperty) Set(value int) error {
-	err, handle := self.GetHandleChecked()
+	handle, err := self.GetHandleChecked()
 	if err != nil {
 		return err
 	}
@@ -152,17 +152,17 @@ func NewBoolProperty(instance *ObjectBase, property C.int) BoolProperty {
 	return BoolProperty { PropertyBase { instance, property } }
 }
 
-func (self *BoolProperty) Get() (error, bool) {
+func (self *BoolProperty) Get() (bool, error) {
 	var val C.int = 0
-	err, handle := self.GetHandleChecked()
+	handle, err := self.GetHandleChecked()
 	if err != nil {
-		return err, false
+		return false, err
 	}
 	err = CHECKED(C.syz_getI(&val, *handle, self.property))
 	if err != nil {
-		return err, false
+		return false, err
 	}
-	return nil, bool(C.bld(val))
+	return bool(C.bld(val)), nil
 }
 
 func (self *BoolProperty) Set(val bool) error {
@@ -172,7 +172,7 @@ func (self *BoolProperty) Set(val bool) error {
 	} else {
 		value = 0
 	}
-	err, handle := self.GetHandleChecked()
+	handle, err := self.GetHandleChecked()
 	if err != nil {
 		return err
 	}
@@ -190,21 +190,21 @@ func NewDoubleProperty(instance *ObjectBase, property C.int) DoubleProperty {
 	return DoubleProperty { PropertyBase { instance, property } }
 }
 
-func (self *DoubleProperty) Get() (error, float32) {
+func (self *DoubleProperty) Get() (float32, error) {
 	var val C.double = 0.0
-	err, handle := self.GetHandleChecked()
+	handle, err := self.GetHandleChecked()
 	if err != nil {
-		return err, 0.0
+		return 0.0, err
 	}
 	err = CHECKED(C.syz_getD(&val, *handle, self.property))
 	if err != nil {
-		return err, 0.0
+		return 0.0, err
 	}
-	return nil, float32(val)
+	return float32(val), nil
 }
 
 func (self *DoubleProperty) Set(value float32) error {
-	err, handle := self.GetHandleChecked()
+	handle, err := self.GetHandleChecked()
 	if err != nil {
 		return err
 	}
@@ -222,21 +222,21 @@ func NewDouble3Property(instance *ObjectBase, property C.int) Double3Property {
 	return Double3Property { PropertyBase { instance, property } }
 }
 
-func (self *Double3Property) Get() (error, float32, float32, float32) {
+func (self *Double3Property) Get() (float32, float32, float32, error) {
 	var x, y, z C.double = 0.0, 0.0, 0.0
-	err, handle := self.GetHandleChecked()
+	handle, err := self.GetHandleChecked()
 	if err != nil {
-		return err, 0.0, 0.0, 0.0
+		return 0.0, 0.0, 0.0, err
 	}
 	err = CHECKED(C.syz_getD3(&x, &y, &z, *handle, self.property))
 	if err != nil {
-		return err, 0.0, 0.0, 0.0
+		return 0.0, 0.0, 0.0, err
 	}
-	return nil, float32(x), float32(y), float32(z)
+	return float32(x), float32(y), float32(z), err
 }
 
 func (self *Double3Property) Set(x float32, y float32, z float32) error {
-	err, handle := self.GetHandleChecked()
+	handle, err := self.GetHandleChecked()
 	if err != nil {
 		return err
 	}
@@ -254,21 +254,21 @@ func NewDouble6Property(instance *ObjectBase, property C.int) Double6Property {
 	return Double6Property { PropertyBase { instance, property } }
 }
 
-func (self *Double6Property) Get() (error, float32, float32, float32, float32, float32, float32) {
+func (self *Double6Property) Get() (float32, float32, float32, float32, float32, float32, error) {
 	var x1, y1, z1, x2, y2, z2 C.double = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
-	err, handle := self.GetHandleChecked()
+	handle, err := self.GetHandleChecked()
 	if err != nil {
-		return err, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+		return 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, err
 	}
 	err = CHECKED(C.syz_getD6(&x1, &y1, &z1, &x2, &y2, &z2, *handle, self.property))
 	if err != nil {
-		return err, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+		return 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, err
 	}
-	return nil, float32(x1), float32(y1), float32(z1), float32(x2), float32(y2), float32(z2)
+	return float32(x1), float32(y1), float32(z1), float32(x2), float32(y2), float32(z2), err
 }
 
 func (self *Double6Property) Set(x1 float32, y1 float32, z1 float32, x2 float32, y2 float32, z2 float32) error {
-	err, handle := self.GetHandleChecked()
+	handle, err := self.GetHandleChecked()
 	if err != nil {
 		return err
 	}
@@ -287,7 +287,7 @@ func NewObjectProperty(instance *ObjectBase, property C.int) ObjectProperty {
 }
 
 func (self *ObjectProperty) Set(value ObjectBase) error {
-	err, handle := self.GetHandleChecked()
+	handle, err := self.GetHandleChecked()
 	if err != nil {
 		return err
 	}
@@ -306,7 +306,7 @@ func NewBiquadProperty(instance *ObjectBase, property C.int) BiquadProperty {
 }
 
 func (self *BiquadProperty) Set(value BiquadConfig) error {
-	err, handle := self.GetHandleChecked()
+	handle, err := self.GetHandleChecked()
 	if err != nil {
 		return err
 	}
@@ -345,11 +345,11 @@ type Context struct {
 	Orientation Double6Property
 	Default_distance_model, Default_panner_strategy IntProperty
 }
-func NewContext() (error, *Context) {
+func NewContext() (*Context, error) {
 	handle := C.create_handle()
 	err := CHECKED(C.syz_createContext(&handle, nil, nil))
 	if err != nil {
-		return err, nil
+		return nil, err
 	}
 	self := Context{}
 	self.Pausable = NewPausable(&handle)
@@ -363,7 +363,7 @@ func NewContext() (error, *Context) {
 	self.Default_closeness_boost = NewDoubleProperty(&self.ObjectBase, P_DEFAULT_CLOSENESS_BOOST)
 	self.Default_closeness_boost_distance = NewDoubleProperty(&self.ObjectBase, P_DEFAULT_CLOSENESS_BOOST_DISTANCE)
 	self.Default_panner_strategy = NewIntProperty(&self.ObjectBase, P_DEFAULT_PANNER_STRATEGY)
-	return nil, &self
+	return &self, nil
 }
 
 func (self *Context) ConfigRoute(output ObjectBase, input ObjectBase, optionalV ...float64) error {
@@ -403,24 +403,24 @@ func newStreamHandle(handle *C.syz_Handle) *StreamHandle {
 	return &StreamHandle { ObjectBase { handle } }
 }
 
-func StreamHandleFromFile(path string) (error, *StreamHandle) {
+func StreamHandleFromFile(path string) (*StreamHandle, error) {
 	handle := C.create_handle()
 	ph := C.CString(path)
 	defer C.free(unsafe.Pointer(ph))
 	err := CHECKED(C.syz_createStreamHandleFromFile(&handle, ph, nil, nil))
 	if err != nil {
-		return err, nil
+		return nil, err
 	}
-	return nil, newStreamHandle(&handle)
+	return newStreamHandle(&handle), err
 }
 
 // Probably needs improvement, Now it only accepts a string because I can't figure a way to safely pass everything from a byte array as const *char, But if you do, Then please submit a pull request.
-func StreamHandleFromMemory(data string) (error, *StreamHandle) {
+func StreamHandleFromMemory(data string) (*StreamHandle, error) {
 	dt := C.CString(data)
 	handle := C.create_handle()
 	err := CHECKED(C.syz_createStreamHandleFromMemory(&handle, C.ulonglong(len(data)), dt, nil, nil))
 	if err != nil {
-		return err, nil
+		return nil, err
 	}
 	sh := newStreamHandle(&handle)
 	// We're doing this instead of synthizer FreeCallbacks because you can't pass go functions to C.
@@ -428,7 +428,7 @@ func StreamHandleFromMemory(data string) (error, *StreamHandle) {
 	runtime.SetFinalizer(sh, func(Sh *StreamHandle) {
 		C.free(unsafe.Pointer(dt))
 	})
-	return nil, sh
+	return sh, nil
 }
 // We're missing custom stream handles and protocols because I'm not properly sure how to implement them, If you do, Then please send a pull request.
 
@@ -458,24 +458,24 @@ func newStreamingGenerator(handle *C.syz_Handle) *StreamingGenerator {
 	return &self
 }
 
-func StreamingGeneratorFromFile(ctx *Context, path string) (error, *StreamingGenerator) {
+func StreamingGeneratorFromFile(ctx *Context, path string) (*StreamingGenerator, error) {
 	ph := C.CString(path)
 	defer C.free(unsafe.Pointer(ph))
 	out := C.create_handle()
 	err := CHECKED(C.syz_createStreamingGeneratorFromFile(&out, *ctx.GetHandle(), ph, nil, nil, nil))
 	if err != nil {
-		return err, nil
+		return nil, err
 	}
-	return nil, newStreamingGenerator(&out)
+	return newStreamingGenerator(&out), err
 }
 
-func StreamingGeneratorFromHandle(ctx *Context, stream *StreamHandle) (error, *StreamingGenerator) {
+func StreamingGeneratorFromHandle(ctx *Context, stream *StreamHandle) (*StreamingGenerator, error) {
 	handle := C.create_handle()
 	err := CHECKED(C.syz_createStreamingGeneratorFromStreamHandle(&handle, *ctx.handle, *stream.handle, nil, nil, nil))
 	if err != nil {
-		return err, nil
+		return nil, err
 	}
-	return nil, newStreamingGenerator(&handle)
+	return newStreamingGenerator(&handle), err
 }
 
 type Source struct {
@@ -491,7 +491,7 @@ func newSource(handle *C.syz_Handle) *Source {
 }
 
 func (self *Source) AddGenerator(gen Generator) error {
-	err, h := gen.GetHandleChecked()
+	h, err := gen.GetHandleChecked()
 	if err != nil {
 		return err
 	}
@@ -502,7 +502,7 @@ func (self *Source) AddGenerator(gen Generator) error {
 	return nil
 }
 func (self *Source) RemoveGenerator(gen Generator) error {
-	err, h := gen.GetHandleChecked()
+	h, err := gen.GetHandleChecked()
 	if err != nil {
 		return err
 	}
@@ -517,13 +517,13 @@ func (self *Source) RemoveGenerator(gen Generator) error {
 type DirectSource struct {
 	Source
 }
-func NewDirectSource(ctx *Context) (error, *DirectSource) {
+func NewDirectSource(ctx *Context) (*DirectSource, error) {
 	out := C.create_handle()
 	err := CHECKED(C.syz_createDirectSource(&out, *ctx.handle, nil, nil, nil))
 	if err != nil {
-		return err, nil
+		return nil, err
 	}
-	return nil, &DirectSource { *newSource(&out) }
+	return &DirectSource { *newSource(&out) }, nil
 }
 
 type AngularPannedSource struct {
@@ -531,7 +531,7 @@ type AngularPannedSource struct {
 	Azimuth, Elevation DoubleProperty
 }
 
-func NewAngularPannedSource(ctx *Context, panner_strategy C.int, OV ...float32) (error, *AngularPannedSource) {
+func NewAngularPannedSource(ctx *Context, panner_strategy C.int, OV ...float32) (*AngularPannedSource, error) {
 	var azimuth float32 = 0.0
 	var elevation float32 = 0.0
 	if len(OV) > 0 {
@@ -543,13 +543,13 @@ func NewAngularPannedSource(ctx *Context, panner_strategy C.int, OV ...float32) 
 	out := C.create_handle()
 	err := CHECKED(C.syz_createAngularPannedSource(&out, *ctx.handle, panner_strategy, C.double(azimuth), C.double(elevation), nil, nil, nil))
 	if err != nil {
-		return err, nil
+		return nil, err
 	}
 	self := AngularPannedSource{}
 	self.Source = *newSource(&out)
 	self.Azimuth = NewDoubleProperty(&self.ObjectBase, P_AZIMUTH)
 	self.Elevation = NewDoubleProperty(&self.ObjectBase, P_ELEVATION)
-	return nil, &self
+	return &self, nil
 }
 
 type ScalarPannedSource struct {
@@ -557,16 +557,16 @@ type ScalarPannedSource struct {
 	PanningScalar DoubleProperty
 }
 
-func NewScalarPannedSource(ctx *Context, panner_strategy C.int, panning_scalar float32) (error, *ScalarPannedSource) {
+func NewScalarPannedSource(ctx *Context, panner_strategy C.int, panning_scalar float32) (*ScalarPannedSource, error) {
 	out := C.create_handle()
 	err := CHECKED(C.syz_createScalarPannedSource(&out, *ctx.handle, panner_strategy, C.double(panning_scalar), nil, nil, nil))
 	if err != nil {
-		return err, nil
+		return nil, err
 	}
 	self := ScalarPannedSource{}
 	self.Source = *newSource(&out)
 	self.PanningScalar = NewDoubleProperty(&self.ObjectBase, P_PANNING_SCALAR)
-	return nil, &self
+	return &self, err
 }
 
 type Source3D struct {
@@ -577,11 +577,11 @@ type Source3D struct {
 	DistanceModel IntProperty
 }
 
-func NewSource3D(ctx *Context) (error, *Source3D) {
+func NewSource3D(ctx *Context) (*Source3D, error) {
 	out := C.create_handle()
 	err := CHECKED(C.syz_createSource3D(&out, *ctx.handle, C.int(PANNER_STRATEGY_DELEGATE), C.double(0.0), C.double(0.0), C.double(0.0), nil, nil, nil))
 	if err != nil {
-		return err, nil
+		return nil, err
 	}
 	self := Source3D{}
 	self.Source = *newSource(&out)
@@ -593,7 +593,7 @@ func NewSource3D(ctx *Context) (error, *Source3D) {
 	self.ClosenessBoostDistance = NewDoubleProperty(&self.ObjectBase, P_CLOSENESS_BOOST_DISTANCE)
 	self.Position = NewDouble3Property(&self.ObjectBase, P_POSITION)
 	self.Orientation = NewDouble6Property(&self.ObjectBase, P_ORIENTATION)
-	return nil, &self
+	return &self, nil
 }
 
 
@@ -605,66 +605,66 @@ type Buffer struct {
 func newBuffer(handle *C.syz_Handle) *Buffer {
 	return &Buffer { ObjectBase { handle } }
 }
-func BufferFromFile(path string) (error, *Buffer) {
+func BufferFromFile(path string) (*Buffer, error) {
 	handle := NewHandle()
 	ph := C.CString(path)
 	defer C.free(unsafe.Pointer(ph))
 		err := CHECKED(C.syz_createBufferFromFile(&handle, ph, nil, nil))
 	if err != nil {
-		return err, nil
+		return nil, err
 	}
-	return nil, newBuffer(&handle)
+	return newBuffer(&handle), err
 }
 
-func BufferFromEncodedData(data string) (error, *Buffer) {
+func BufferFromEncodedData(data string) (*Buffer, error) {
 	handle := NewHandle()
 	dt := C.CString(data)
 	defer C.free(unsafe.Pointer(dt))
 	length := len(data)
 	if length == 0 {
-		return errors.New("Cannot safely pass empty arrays to synthizer."), nil
+		return nil, errors.New("Cannot safely pass empty arrays to synthizer.")
 	}
 	err := CHECKED(C.syz_createBufferFromEncodedData(&handle, C.ulonglong(length), dt, nil, nil))
 	if err != nil {
-		return err, nil
+		return nil, err
 	}
-	return nil, newBuffer(&handle)
+	return newBuffer(&handle), err
 }
 // Todo: Add BufferFromFloatArray function.
 
-func BufferFromStreamHandle(stream StreamHandle) (error, *Buffer) {
+func BufferFromStreamHandle(stream StreamHandle) (*Buffer, error) {
 	handle := NewHandle()
 	err := CHECKED(C.syz_createBufferFromStreamHandle(&handle, *stream.handle, nil, nil))
 	if err != nil {
-		return err, nil
+		return nil, err
 	}
-	return nil, newBuffer(&handle)
+	return newBuffer(&handle), err
 }
-func (self *Buffer) GetChannels() (error, int) {
+func (self *Buffer) GetChannels() (int, error) {
 	var ret C.uint
 	err := CHECKED(C.syz_bufferGetChannels(&ret, *self.handle))
 	if err != nil {
-		return err, 0
+		return 0, err
 	}
-	return nil, int(ret)
+	return int(ret), nil
 }
 
-func (self *Buffer) GetLengthInSamples() (error, int) {
+func (self *Buffer) GetLengthInSamples() (int, error) {
 	var ret C.uint
 	err := CHECKED(C.syz_bufferGetLengthInSamples(&ret, *self.handle))
 	if err != nil {
-		return err, 0
+		return 0, err
 	}
-	return nil, int(ret)
+	return int(ret), nil
 }
 
-func (self *Buffer) GetLengthInSeconds() (error, float64) {
+func (self *Buffer) GetLengthInSeconds() (float64, error) {
 	var ret C.double
 	err := CHECKED(C.syz_bufferGetLengthInSeconds(&ret, *self.handle))
 	if err != nil {
-		return err, 0.0
+		return 0.0, err
 	}
-	return nil, float64(ret)
+	return float64(ret), err
 }
 
 // Todo: Add Buffer.GetLengthInBytes
@@ -675,22 +675,22 @@ type BufferGenerator struct {
 	PlaybackPosition DoubleProperty
 }
 
-func NewBufferGenerator(ctx *Context) (error, *BufferGenerator) {
+func NewBufferGenerator(ctx *Context) (*BufferGenerator, error) {
 	handle := NewHandle()
-	err, ctx_h := ctx.GetHandleChecked()
+	ctx_h, err := ctx.GetHandleChecked()
 	if err != nil {
-		return err, nil
+		return nil, err
 	}
 	err = CHECKED(C.syz_createBufferGenerator(&handle, *ctx_h, nil, nil, nil))
 	if err != nil {
-		return err, nil
+		return nil, err
 	}
 	self := BufferGenerator{}
 	self.Generator = *newGenerator(&handle)
 	self.Buffer = NewObjectProperty(&self.ObjectBase, P_BUFFER)
 	self.PlaybackPosition = NewDoubleProperty(&self.ObjectBase, P_PLAYBACK_POSITION)
 	self.Looping = NewBoolProperty(&self.ObjectBase, P_LOOPING)
-	return nil, &self
+	return &self, err
 }
 
 
@@ -699,20 +699,20 @@ type NoiseGenerator struct {
 	NoiseType IntProperty
 }
 
-func NewNoiseGenerator(ctx *Context, channels int) (error, *NoiseGenerator) {
+func NewNoiseGenerator(ctx *Context, channels int) (*NoiseGenerator, error) {
 	handle := NewHandle()
-	err, ctx_h := ctx.GetHandleChecked()
+	ctx_h, err := ctx.GetHandleChecked()
 	if err != nil {
-		return err, nil
+		return nil, err
 	}
 	err = CHECKED(C.syz_createNoiseGenerator(&handle, *ctx_h, C.uint(channels), nil, nil, nil))
 	if err != nil {
-		return err, nil
+		return nil, err
 	}
 	self := NoiseGenerator{}
 	self.Generator = *newGenerator(&handle)
 	self.NoiseType = NewIntProperty(&self.ObjectBase, P_NOISE_TYPE)
-	return nil, &self
+	return &self, nil
 }
 
 
@@ -720,30 +720,30 @@ type BiquadConfig struct {
 	config *C.struct_syz_BiquadConfig
 }
 
-func newBiquadConfig() (error, *BiquadConfig) {
+func newBiquadConfig() (*BiquadConfig, error) {
 	self := BiquadConfig { &C.struct_syz_BiquadConfig{} }
 	err := CHECKED(C.syz_biquadDesignIdentity(self.config))
 	if err != nil {
-		return err, nil
+		return nil, err
 	}
-	return nil, &self
+	return &self, nil
 }
 
-func BiquadConfigDesignIdentity() (error, *BiquadConfig) {
-	err, out := newBiquadConfig()
+func BiquadConfigDesignIdentity() (*BiquadConfig, error) {
+	out, err := newBiquadConfig()
 	if err != nil {
-		return err, nil
+		return nil, err
 	}
 	err = CHECKED(C.syz_biquadDesignIdentity(out.config))
 	if err != nil {
-		return err, nil
+		return nil, err
 	}
-	return nil, out
+	return out, err
 }
-func BiquadConfigDesignLowpass(frequency float64, OV ...float64) (error, *BiquadConfig) {
-	err, out := newBiquadConfig()
+func BiquadConfigDesignLowpass(frequency float64, OV ...float64) (*BiquadConfig, error) {
+	out, err := newBiquadConfig()
 	if err != nil {
-		return err, nil
+		return nil, err
 	}
 	q := 0.7071135624381276
 	if len(OV) > 0 {
@@ -751,15 +751,15 @@ func BiquadConfigDesignLowpass(frequency float64, OV ...float64) (error, *Biquad
 	}
 	err = CHECKED(C.syz_biquadDesignLowpass(out.config, C.double(frequency), C.double(q)))
 	if err != nil {
-		return err, nil
+		return nil, err
 	}
-	return nil, out
+	return out, nil
 }
 
-func BiquadConfigDesignHighpass(frequency float64, OV ...float64) (error, *BiquadConfig) {
-	err, out := newBiquadConfig()
+func BiquadConfigDesignHighpass(frequency float64, OV ...float64) (*BiquadConfig, error) {
+	out, err := newBiquadConfig()
 	if err != nil {
-		return err, nil
+		return nil, err
 	}
 	q := 0.7071135624381276
 	if len(OV) > 0 {
@@ -767,21 +767,21 @@ func BiquadConfigDesignHighpass(frequency float64, OV ...float64) (error, *Biqua
 	}
 	err = CHECKED(C.syz_biquadDesignHighpass(out.config, C.double(frequency), C.double(q)))
 	if err != nil {
-		return err, nil
+		return nil, err
 	}
-	return nil, out
+	return out, nil
 }
 
-func BiquadDesignBandpass(frequency float64, bandwidth float64) (error, *BiquadConfig) {
-	err, out := newBiquadConfig()
+func BiquadDesignBandpass(frequency float64, bandwidth float64) (*BiquadConfig, error) {
+	out, err := newBiquadConfig()
 	if err != nil {
-		return err, nil
+		return nil, err
 	}
 	err = CHECKED(C.syz_biquadDesignBandpass(out.config, C.double(frequency), C.double(bandwidth)))
 	if err != nil {
-		return err, nil
+		return nil, err
 	}
-	return nil, out
+	return out, nil
 }
 
 type GlobalEffect struct {
@@ -816,15 +816,15 @@ type GlobalFdnReverb struct {
 	MeanFreePath, T60, LateReflectionsLfRolloff, LateReflectionsLfReference, LateReflectionsHfRolloff, LateReflectionsHfReference, LateReflectionsDiffusion, LateReflectionsModulationDepth, LateReflectionsModulationFrequency, LateReflectionsDelay DoubleProperty	
 }
 
-func NewGlobalFdnReverb(ctx *Context) (error, *GlobalFdnReverb) {
+func NewGlobalFdnReverb(ctx *Context) (*GlobalFdnReverb, error) {
 	handle := NewHandle()
-	err, h := ctx.GetHandleChecked()
+	h, err := ctx.GetHandleChecked()
 	if err != nil {
-		return err, nil
+		return nil, err
 	}
 	err = CHECKED(C.syz_createGlobalFdnReverb(&handle, *h, nil, nil, nil))
 	if err != nil {
-		return err, nil
+		return nil, err
 	}
 	self := GlobalFdnReverb {}
 	self.GlobalEffect = *newGlobalEffect(&handle)
@@ -838,7 +838,7 @@ func NewGlobalFdnReverb(ctx *Context) (error, *GlobalFdnReverb) {
 	self.LateReflectionsModulationDepth = NewDoubleProperty(&self.ObjectBase, P_LATE_REFLECTIONS_MODULATION_DEPTH)
 	self.LateReflectionsModulationFrequency = NewDoubleProperty(&self.ObjectBase, P_LATE_REFLECTIONS_MODULATION_FREQUENCY)
 	self.LateReflectionsDelay = NewDoubleProperty(&self.ObjectBase, P_LATE_REFLECTIONS_DELAY)
-	return nil, &self
+	return &self, nil
 }
 
 type LibraryConfig struct {

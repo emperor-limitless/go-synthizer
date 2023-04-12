@@ -30,7 +30,7 @@ import (
 )
 
 func main() {
-	fmt.Println("Enter file path, Example: hello.mp3.")
+	fmt.Println("Enter file path")
 	var flname string
 	sr := bufio.NewScanner(os.Stdin)
 	sr.Scan()
@@ -42,15 +42,15 @@ func main() {
 	conf := synthizer.NewLibraryConfig(synthizer.LOG_LEVEL_DEBUG, synthizer.LOGGING_BACKEND_STDERR)
 	synthizer.InitializeWithConfig(&conf)
 	defer synthizer.Shutdown()
-	err, ctx := synthizer.NewContext()
+	ctx, err := synthizer.NewContext()
 	synthizer.GOCHECK(err)
 	defer ctx.Destroy()
-	err, sh := synthizer.StreamHandleFromFile(flname)
+	sh, err := synthizer.StreamHandleFromFile(flname)
 	synthizer.GOCHECK(err)
-	err, gen := synthizer.StreamingGeneratorFromHandle(ctx, sh)
+	gen, err := synthizer.StreamingGeneratorFromHandle(ctx, sh)
 	synthizer.GOCHECK(err)
 	defer gen.Destroy()
-	err, src := synthizer.NewDirectSource(ctx)
+	src, err := synthizer.NewDirectSource(ctx)
 	synthizer.GOCHECK(err)
 	defer src.Destroy()
 	src.AddGenerator(gen.Generator)
