@@ -1,3 +1,3 @@
 module github.com/mohamedSulaimanAlmarzooqi/go-synthizer
 
-go 1.16
+go 1.20
