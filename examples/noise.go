@@ -41,7 +41,7 @@ func main() {
 	synthizer.GOCHECK(err)
 	defer src.Destroy()
 	src.Gain.Set(0.3) // By default the noise output is extremely loud
-	src.AddGenerator(gen.Generator)
+	src.AddGenerator(gen)
 	gen.NoiseType.Set(synthizer.NOISE_TYPE_VM) // For others, Check consts.go in the mains go-synthizer directory.
 	var empty string
 	fmt.Println("Press enter to exit.")

@@ -54,12 +54,12 @@ func main() {
 	gen, err := synthizer.NewBufferGenerator(ctx)
 	synthizer.GOCHECK(err)
 	defer gen.Destroy()
-	gen.Buffer.Set(buf.ObjectBase)
+	gen.Buffer.Set(buf)
 	gen.Looping.Set(true)
 	src, err := synthizer.NewSource3D(ctx)
 	synthizer.GOCHECK(err)
 	defer src.Destroy()
-	src.AddGenerator(gen.Generator)
+	src.AddGenerator(gen)
 	var argv []string
 	for true {
 		fmt.Println("Enter command...")

@@ -57,15 +57,22 @@ import (
 	"runtime"
 )
 
+// Synthizer main object interface.
+type ObjectBase interface {
+	GetHandleChecked() (*C.syz_Handle, error)
+	GetHandle() *C.syz_Handle
+	Destroy() error
+	ConfigDeleteBehavior(int, float32) error
+}
 // The synthizer main object struct.
-type ObjectBase struct {
+type objectBase struct {
 	handle *C.syz_Handle
 }
-func _NewObjectBase(hdl *C.syz_Handle) ObjectBase {
-	return ObjectBase { handle: hdl }
+func _NewObjectBase(hdl *C.syz_Handle) objectBase {
+	return objectBase { handle: hdl }
 }
 
-func (self *ObjectBase) GetHandleChecked() (*C.syz_Handle, error) {
+func (self *objectBase) GetHandleChecked() (*C.syz_Handle, error) {
 	// Any attempt to reference a non-existing object should raise an error
 	handle := self.GetHandle()
 	if *handle == 0 {
@@ -74,23 +81,23 @@ func (self *ObjectBase) GetHandleChecked() (*C.syz_Handle, error) {
 	return handle, nil
 }
 
-func (self *ObjectBase) Destroy() error {
+func (self *objectBase) Destroy() error {
 	err := CHECKED(C.syz_handleDecRef(*self.handle))
 	//*self.handle = 0
 	return err
 }
 
-func (self *ObjectBase) GetHandle() *C.syz_Handle {
+func (self *objectBase) GetHandle() *C.syz_Handle {
 	return self.handle
 }
-func (self *ObjectBase) ConfigDeleteBehavior(linger int, timeout float32) error {
+func (self *objectBase) ConfigDeleteBehavior(linger int, timeout float32) error {
 	cfg := C.create_DeleteBehaviorConfig(C.int(linger), C.double(timeout))
 	C.syz_initDeleteBehaviorConfig(&cfg)
 	return CHECKED(C.syz_configDeleteBehavior(*self.handle, &cfg))
 }
 
 type PropertyBase struct {
-	instance *ObjectBase
+	instance *objectBase
 	property C.int
 }
 func (self *PropertyBase) GetHandleChecked() (*C.syz_Handle, error) {
@@ -113,7 +120,7 @@ type IntProperty struct {
 	PropertyBase
 }
 
-func NewIntProperty(instance *ObjectBase, property C.int) IntProperty {
+func NewIntProperty(instance *objectBase, property C.int) IntProperty {
 	return IntProperty { PropertyBase { instance, property } }
 }
 
@@ -148,7 +155,7 @@ type BoolProperty struct {
 	PropertyBase
 }
 
-func NewBoolProperty(instance *ObjectBase, property C.int) BoolProperty {
+func NewBoolProperty(instance *objectBase, property C.int) BoolProperty {
 	return BoolProperty { PropertyBase { instance, property } }
 }
 
@@ -186,7 +193,7 @@ func (self *BoolProperty) Set(val bool) error {
 type DoubleProperty struct {
 	PropertyBase
 }
-func NewDoubleProperty(instance *ObjectBase, property C.int) DoubleProperty {
+func NewDoubleProperty(instance *objectBase, property C.int) DoubleProperty {
 	return DoubleProperty { PropertyBase { instance, property } }
 }
 
@@ -218,7 +225,7 @@ func (self *DoubleProperty) Set(value float32) error {
 type Double3Property struct {
 	PropertyBase
 }
-func NewDouble3Property(instance *ObjectBase, property C.int) Double3Property {
+func NewDouble3Property(instance *objectBase, property C.int) Double3Property {
 	return Double3Property { PropertyBase { instance, property } }
 }
 
@@ -250,7 +257,7 @@ func (self *Double3Property) Set(x float32, y float32, z float32) error {
 type Double6Property struct {
 	PropertyBase
 }
-func NewDouble6Property(instance *ObjectBase, property C.int) Double6Property {
+func NewDouble6Property(instance *objectBase, property C.int) Double6Property {
 	return Double6Property { PropertyBase { instance, property } }
 }
 
@@ -282,7 +289,7 @@ func (self *Double6Property) Set(x1 float32, y1 float32, z1 float32, x2 float32,
 type ObjectProperty struct {
 	PropertyBase
 }
-func NewObjectProperty(instance *ObjectBase, property C.int) ObjectProperty {
+func NewObjectProperty(instance *objectBase, property C.int) ObjectProperty {
 	return ObjectProperty { PropertyBase { instance, property } }
 }
 
@@ -291,7 +298,7 @@ func (self *ObjectProperty) Set(value ObjectBase) error {
 	if err != nil {
 		return err
 	}
-	err = CHECKED(C.syz_setO(*handle, self.property, *value.handle))
+	err = CHECKED(C.syz_setO(*handle, self.property, *value.GetHandle()))
 	if err != nil {
 		return err
 	}
@@ -301,7 +308,7 @@ func (self *ObjectProperty) Set(value ObjectBase) error {
 type BiquadProperty struct {
 	PropertyBase
 }
-func NewBiquadProperty(instance *ObjectBase, property C.int) BiquadProperty {
+func NewBiquadProperty(instance *objectBase, property C.int) BiquadProperty {
 	return BiquadProperty { PropertyBase { instance, property } }
 }
 
@@ -318,15 +325,15 @@ func (self *BiquadProperty) Set(value BiquadConfig) error {
 }
 
 type Pausable struct {
-	ObjectBase
+	objectBase
 	current_time, suggested_automation_time DoubleProperty
 }
 
 func NewPausable(handle *C.syz_Handle) Pausable {
 	pb := Pausable {}
-	pb.ObjectBase = ObjectBase { handle } 
-	pb.current_time = NewDoubleProperty(&pb.ObjectBase, P_CURRENT_TIME)
-	pb.suggested_automation_time = NewDoubleProperty(&pb.ObjectBase, P_SUGGESTED_AUTOMATION_TIME)
+	pb.objectBase = objectBase { handle } 
+	pb.current_time = NewDoubleProperty(&pb.objectBase, P_CURRENT_TIME)
+	pb.suggested_automation_time = NewDoubleProperty(&pb.objectBase, P_SUGGESTED_AUTOMATION_TIME)
 	return pb
 }
 func (self *Pausable) Play() error {
@@ -353,16 +360,16 @@ func NewContext() (*Context, error) {
 	}
 	self := Context{}
 	self.Pausable = NewPausable(&handle)
-	self.Gain = NewDoubleProperty(&self.ObjectBase, P_GAIN)
-	self.Position = NewDouble3Property(&self.ObjectBase, P_POSITION)
-	self.Orientation = NewDouble6Property(&self.ObjectBase, P_ORIENTATION)
-	self.Default_distance_model = NewIntProperty(&self.ObjectBase, P_DEFAULT_DISTANCE_MODEL)
-	self.Default_distance_ref = NewDoubleProperty(&self.ObjectBase, P_DEFAULT_DISTANCE_REF)
-	self.Default_distance_max = NewDoubleProperty(&self.ObjectBase, P_DEFAULT_DISTANCE_MAX)
-	self.Default_rolloff = NewDoubleProperty(&self.ObjectBase, P_DEFAULT_ROLLOFF)
-	self.Default_closeness_boost = NewDoubleProperty(&self.ObjectBase, P_DEFAULT_CLOSENESS_BOOST)
-	self.Default_closeness_boost_distance = NewDoubleProperty(&self.ObjectBase, P_DEFAULT_CLOSENESS_BOOST_DISTANCE)
-	self.Default_panner_strategy = NewIntProperty(&self.ObjectBase, P_DEFAULT_PANNER_STRATEGY)
+	self.Gain = NewDoubleProperty(&self.objectBase, P_GAIN)
+	self.Position = NewDouble3Property(&self.objectBase, P_POSITION)
+	self.Orientation = NewDouble6Property(&self.objectBase, P_ORIENTATION)
+	self.Default_distance_model = NewIntProperty(&self.objectBase, P_DEFAULT_DISTANCE_MODEL)
+	self.Default_distance_ref = NewDoubleProperty(&self.objectBase, P_DEFAULT_DISTANCE_REF)
+	self.Default_distance_max = NewDoubleProperty(&self.objectBase, P_DEFAULT_DISTANCE_MAX)
+	self.Default_rolloff = NewDoubleProperty(&self.objectBase, P_DEFAULT_ROLLOFF)
+	self.Default_closeness_boost = NewDoubleProperty(&self.objectBase, P_DEFAULT_CLOSENESS_BOOST)
+	self.Default_closeness_boost_distance = NewDoubleProperty(&self.objectBase, P_DEFAULT_CLOSENESS_BOOST_DISTANCE)
+	self.Default_panner_strategy = NewIntProperty(&self.objectBase, P_DEFAULT_PANNER_STRATEGY)
 	return &self, nil
 }
 
@@ -378,13 +385,13 @@ func (self *Context) ConfigRoute(output ObjectBase, input ObjectBase, optionalV 
 			config.fade_time = C.double(optionalV[1])
 		}
 	}
-	err = CHECKED(C.syz_routingConfigRoute(*self.handle, *output.handle, *input.handle, &config))
+	err = CHECKED(C.syz_routingConfigRoute(*self.handle, *output.GetHandle(), *input.GetHandle(), &config))
 	if err != nil {
 		return err
 	}
 	return nil
 }
-func (self *Context) RemoveRoute(output ObjectBase, input ObjectBase, optionalV ...float64) error {
+func (self *Context) RemoveRoute(output objectBase, input objectBase, optionalV ...float64) error {
 	fade_time := 0.01
 	if len(optionalV) > 0 {
 		fade_time = optionalV[0]
@@ -397,10 +404,10 @@ func (self *Context) RemoveRoute(output ObjectBase, input ObjectBase, optionalV 
 }
 
 type StreamHandle struct {
-	ObjectBase
+	objectBase
 }
 func newStreamHandle(handle *C.syz_Handle) *StreamHandle {
-	return &StreamHandle { ObjectBase { handle } }
+	return &StreamHandle { objectBase { handle } }
 }
 
 func StreamHandleFromFile(path string) (*StreamHandle, error) {
@@ -432,29 +439,37 @@ func StreamHandleFromMemory(data string) (*StreamHandle, error) {
 }
 // We're missing custom stream handles and protocols because I'm not properly sure how to implement them, If you do, Then please send a pull request.
 
-type Generator struct {
+type Generator interface {
+	// We use useless functions just to know what implements generator.
+	synthizerGeneratorImpl() bool
+	ObjectBase
+}
+type generator struct {
 	Pausable
 	Gain, PitchBend DoubleProperty
 }
-func newGenerator(handle *C.syz_Handle) *Generator {
-	self := Generator{}
+func newGenerator(handle *C.syz_Handle) *generator {
+	self := generator{}
 	self.Pausable = NewPausable(handle)
-	self.Gain = NewDoubleProperty(&self.ObjectBase, P_GAIN)
-	self.PitchBend = NewDoubleProperty(&self.ObjectBase, P_PITCH_BEND)
+	self.Gain = NewDoubleProperty(&self.objectBase, P_GAIN)
+	self.PitchBend = NewDoubleProperty(&self.objectBase, P_PITCH_BEND)
 	return &self
 }
 
+func (gen *generator) synthizerGeneratorImpl() bool {
+	return true
+}
 
 type StreamingGenerator struct {
-	Generator
+	generator
 	Looping BoolProperty
 	PlaybackPosition DoubleProperty
 }
 func newStreamingGenerator(handle *C.syz_Handle) *StreamingGenerator {
 	self := StreamingGenerator{}
-	self.Generator = *newGenerator(handle)
-	self.Looping = NewBoolProperty(&self.ObjectBase, P_LOOPING)
-	self.PlaybackPosition = NewDoubleProperty(&self.ObjectBase, P_PLAYBACK_POSITION)
+	self.generator = *newGenerator(handle)
+	self.Looping = NewBoolProperty(&self.objectBase, P_LOOPING)
+	self.PlaybackPosition = NewDoubleProperty(&self.objectBase, P_PLAYBACK_POSITION)
 	return &self
 }
 
@@ -477,20 +492,25 @@ func StreamingGeneratorFromHandle(ctx *Context, stream *StreamHandle) (*Streamin
 	}
 	return newStreamingGenerator(&handle), err
 }
+type Source interface {
+	AddGenerator(Generator) error
+	RemoveGenerator(Generator) error
+	ObjectBase
+}
 
-type Source struct {
+type source struct {
 	Pausable
 	Gain DoubleProperty
 }
 
-func newSource(handle *C.syz_Handle) *Source {
-	self := Source{}
+func newSource(handle *C.syz_Handle) *source {
+	self := source{}
 	self.Pausable = NewPausable(handle)
-	self.Gain = NewDoubleProperty(&self.ObjectBase, P_GAIN)
+	self.Gain = NewDoubleProperty(&self.objectBase, P_GAIN)
 	return &self
 }
 
-func (self *Source) AddGenerator(gen Generator) error {
+func (self *source) AddGenerator(gen Generator) error {
 	h, err := gen.GetHandleChecked()
 	if err != nil {
 		return err
@@ -501,7 +521,7 @@ func (self *Source) AddGenerator(gen Generator) error {
 	}
 	return nil
 }
-func (self *Source) RemoveGenerator(gen Generator) error {
+func (self *source) RemoveGenerator(gen Generator) error {
 	h, err := gen.GetHandleChecked()
 	if err != nil {
 		return err
@@ -515,7 +535,7 @@ func (self *Source) RemoveGenerator(gen Generator) error {
 
 
 type DirectSource struct {
-	Source
+	source
 }
 func NewDirectSource(ctx *Context) (*DirectSource, error) {
 	out := C.create_handle()
@@ -527,7 +547,7 @@ func NewDirectSource(ctx *Context) (*DirectSource, error) {
 }
 
 type AngularPannedSource struct {
-	Source
+	source
 	Azimuth, Elevation DoubleProperty
 }
 
@@ -546,14 +566,14 @@ func NewAngularPannedSource(ctx *Context, panner_strategy C.int, OV ...float32) 
 		return nil, err
 	}
 	self := AngularPannedSource{}
-	self.Source = *newSource(&out)
-	self.Azimuth = NewDoubleProperty(&self.ObjectBase, P_AZIMUTH)
-	self.Elevation = NewDoubleProperty(&self.ObjectBase, P_ELEVATION)
+	self.source = *newSource(&out)
+	self.Azimuth = NewDoubleProperty(&self.objectBase, P_AZIMUTH)
+	self.Elevation = NewDoubleProperty(&self.objectBase, P_ELEVATION)
 	return &self, nil
 }
 
 type ScalarPannedSource struct {
-	Source
+	source
 	PanningScalar DoubleProperty
 }
 
@@ -564,13 +584,13 @@ func NewScalarPannedSource(ctx *Context, panner_strategy C.int, panning_scalar f
 		return nil, err
 	}
 	self := ScalarPannedSource{}
-	self.Source = *newSource(&out)
-	self.PanningScalar = NewDoubleProperty(&self.ObjectBase, P_PANNING_SCALAR)
+	self.source = *newSource(&out)
+	self.PanningScalar = NewDoubleProperty(&self.objectBase, P_PANNING_SCALAR)
 	return &self, err
 }
 
 type Source3D struct {
-	Source
+	source
 	DistanceRef, DistanceMax, Rolloff, ClosenessBoost, ClosenessBoostDistance DoubleProperty
 	Position Double3Property
 	Orientation Double6Property
@@ -584,26 +604,26 @@ func NewSource3D(ctx *Context) (*Source3D, error) {
 		return nil, err
 	}
 	self := Source3D{}
-	self.Source = *newSource(&out)
-	self.DistanceModel = NewIntProperty(&self.ObjectBase, P_DISTANCE_MODEL)
-	self.DistanceRef = NewDoubleProperty(&self.ObjectBase, P_DISTANCE_REF)
-	self.DistanceMax = NewDoubleProperty(&self.ObjectBase, P_DISTANCE_MAX)
-	self.Rolloff = NewDoubleProperty(&self.ObjectBase, P_ROLLOFF)
-	self.ClosenessBoost = NewDoubleProperty(&self.ObjectBase, P_CLOSENESS_BOOST)
-	self.ClosenessBoostDistance = NewDoubleProperty(&self.ObjectBase, P_CLOSENESS_BOOST_DISTANCE)
-	self.Position = NewDouble3Property(&self.ObjectBase, P_POSITION)
-	self.Orientation = NewDouble6Property(&self.ObjectBase, P_ORIENTATION)
+	self.source = *newSource(&out)
+	self.DistanceModel = NewIntProperty(&self.objectBase, P_DISTANCE_MODEL)
+	self.DistanceRef = NewDoubleProperty(&self.objectBase, P_DISTANCE_REF)
+	self.DistanceMax = NewDoubleProperty(&self.objectBase, P_DISTANCE_MAX)
+	self.Rolloff = NewDoubleProperty(&self.objectBase, P_ROLLOFF)
+	self.ClosenessBoost = NewDoubleProperty(&self.objectBase, P_CLOSENESS_BOOST)
+	self.ClosenessBoostDistance = NewDoubleProperty(&self.objectBase, P_CLOSENESS_BOOST_DISTANCE)
+	self.Position = NewDouble3Property(&self.objectBase, P_POSITION)
+	self.Orientation = NewDouble6Property(&self.objectBase, P_ORIENTATION)
 	return &self, nil
 }
 
 
 
 type Buffer struct {
-	ObjectBase
+	objectBase
 }
 
 func newBuffer(handle *C.syz_Handle) *Buffer {
-	return &Buffer { ObjectBase { handle } }
+	return &Buffer { objectBase { handle } }
 }
 func BufferFromFile(path string) (*Buffer, error) {
 	handle := NewHandle()
@@ -669,7 +689,7 @@ func (self *Buffer) GetLengthInSeconds() (float64, error) {
 
 // Todo: Add Buffer.GetLengthInBytes
 type BufferGenerator struct {
-	Generator
+	generator
 	Looping BoolProperty
 	Buffer ObjectProperty
 	PlaybackPosition DoubleProperty
@@ -686,16 +706,16 @@ func NewBufferGenerator(ctx *Context) (*BufferGenerator, error) {
 		return nil, err
 	}
 	self := BufferGenerator{}
-	self.Generator = *newGenerator(&handle)
-	self.Buffer = NewObjectProperty(&self.ObjectBase, P_BUFFER)
-	self.PlaybackPosition = NewDoubleProperty(&self.ObjectBase, P_PLAYBACK_POSITION)
-	self.Looping = NewBoolProperty(&self.ObjectBase, P_LOOPING)
+	self.generator = *newGenerator(&handle)
+	self.Buffer = NewObjectProperty(&self.objectBase, P_BUFFER)
+	self.PlaybackPosition = NewDoubleProperty(&self.objectBase, P_PLAYBACK_POSITION)
+	self.Looping = NewBoolProperty(&self.objectBase, P_LOOPING)
 	return &self, err
 }
 
 
 type NoiseGenerator struct {
-	Generator
+	generator
 	NoiseType IntProperty
 }
 
@@ -710,8 +730,8 @@ func NewNoiseGenerator(ctx *Context, channels int) (*NoiseGenerator, error) {
 		return nil, err
 	}
 	self := NoiseGenerator{}
-	self.Generator = *newGenerator(&handle)
-	self.NoiseType = NewIntProperty(&self.ObjectBase, P_NOISE_TYPE)
+	self.generator = *newGenerator(&handle)
+	self.NoiseType = NewIntProperty(&self.objectBase, P_NOISE_TYPE)
 	return &self, nil
 }
 
@@ -785,16 +805,16 @@ func BiquadDesignBandpass(frequency float64, bandwidth float64) (*BiquadConfig, 
 }
 
 type GlobalEffect struct {
-	ObjectBase
+	objectBase
 	FilterInput BiquadProperty
 	Gain DoubleProperty
 }
 
 func newGlobalEffect(handle *C.syz_Handle) *GlobalEffect {
 	self := GlobalEffect{}
-	self.ObjectBase = ObjectBase { handle }
-	self.Gain = NewDoubleProperty(&self.ObjectBase, P_GAIN)
-	self.FilterInput = NewBiquadProperty(&self.ObjectBase, P_FILTER_INPUT)
+	self.objectBase = objectBase { handle }
+	self.Gain = NewDoubleProperty(&self.objectBase, P_GAIN)
+	self.FilterInput = NewBiquadProperty(&self.objectBase, P_FILTER_INPUT)
 	return &self
 }
 func (self *GlobalEffect) Reset() error {
@@ -828,16 +848,16 @@ func NewGlobalFdnReverb(ctx *Context) (*GlobalFdnReverb, error) {
 	}
 	self := GlobalFdnReverb {}
 	self.GlobalEffect = *newGlobalEffect(&handle)
-	self.MeanFreePath = NewDoubleProperty(&self.ObjectBase, P_MEAN_FREE_PATH)
-	self.T60 = NewDoubleProperty(&self.ObjectBase, P_T60)
-	self.LateReflectionsLfRolloff = NewDoubleProperty(&self.ObjectBase, P_LATE_REFLECTIONS_LF_ROLLOFF)
-	self.LateReflectionsLfReference = NewDoubleProperty(&self.ObjectBase, P_LATE_REFLECTIONS_LF_REFERENCE)
-	self.LateReflectionsHfRolloff = NewDoubleProperty(&self.ObjectBase, P_LATE_REFLECTIONS_HF_ROLLOFF)
-	self.LateReflectionsHfReference = NewDoubleProperty(&self.ObjectBase, P_LATE_REFLECTIONS_HF_REFERENCE)
-	self.LateReflectionsDiffusion = NewDoubleProperty(&self.ObjectBase, P_LATE_REFLECTIONS_DIFFUSION)
-	self.LateReflectionsModulationDepth = NewDoubleProperty(&self.ObjectBase, P_LATE_REFLECTIONS_MODULATION_DEPTH)
-	self.LateReflectionsModulationFrequency = NewDoubleProperty(&self.ObjectBase, P_LATE_REFLECTIONS_MODULATION_FREQUENCY)
-	self.LateReflectionsDelay = NewDoubleProperty(&self.ObjectBase, P_LATE_REFLECTIONS_DELAY)
+	self.MeanFreePath = NewDoubleProperty(&self.objectBase, P_MEAN_FREE_PATH)
+	self.T60 = NewDoubleProperty(&self.objectBase, P_T60)
+	self.LateReflectionsLfRolloff = NewDoubleProperty(&self.objectBase, P_LATE_REFLECTIONS_LF_ROLLOFF)
+	self.LateReflectionsLfReference = NewDoubleProperty(&self.objectBase, P_LATE_REFLECTIONS_LF_REFERENCE)
+	self.LateReflectionsHfRolloff = NewDoubleProperty(&self.objectBase, P_LATE_REFLECTIONS_HF_ROLLOFF)
+	self.LateReflectionsHfReference = NewDoubleProperty(&self.objectBase, P_LATE_REFLECTIONS_HF_REFERENCE)
+	self.LateReflectionsDiffusion = NewDoubleProperty(&self.objectBase, P_LATE_REFLECTIONS_DIFFUSION)
+	self.LateReflectionsModulationDepth = NewDoubleProperty(&self.objectBase, P_LATE_REFLECTIONS_MODULATION_DEPTH)
+	self.LateReflectionsModulationFrequency = NewDoubleProperty(&self.objectBase, P_LATE_REFLECTIONS_MODULATION_FREQUENCY)
+	self.LateReflectionsDelay = NewDoubleProperty(&self.objectBase, P_LATE_REFLECTIONS_DELAY)
 	return &self, nil
 }
 

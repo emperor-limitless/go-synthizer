@@ -58,7 +58,7 @@ func main() {
 	src, err := synthizer.NewDirectSource(ctx)
 	synthizer.GOCHECK(err)
 	defer src.Destroy()
-	src.AddGenerator(gen.Generator)
+	src.AddGenerator(gen)
 	src.Gain.Set(0.6)
 	src.Play()
 	fmt.Println("Press enter to exit...")

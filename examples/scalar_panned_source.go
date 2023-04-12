@@ -53,12 +53,12 @@ func main() {
 	gen, err := synthizer.NewBufferGenerator(ctx)
 	synthizer.GOCHECK(err)
 	defer gen.Destroy()
-	gen.Buffer.Set(buf.ObjectBase)
+	gen.Buffer.Set(buf)
 	gen.Looping.Set(true)
 	src, err := synthizer.NewScalarPannedSource(ctx, synthizer.PANNER_STRATEGY_HRTF, -1.0)
 	synthizer.GOCHECK(err)
 	defer src.Destroy()
-	src.AddGenerator(gen.Generator)
+	src.AddGenerator(gen)
 	iterations := 100.0
 	steps_per_iteration := 100.0
 	half_iteration := steps_per_iteration / 2.0

@@ -53,7 +53,7 @@ func main() {
 	src, err := synthizer.NewDirectSource(ctx)
 	synthizer.GOCHECK(err)
 	defer src.Destroy()
-	src.AddGenerator(gen.Generator)
+	src.AddGenerator(gen)
 	src.Play()
 	fmt.Println("Press enter to exit...")
 	var empty string
